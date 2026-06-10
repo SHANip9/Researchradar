@@ -1,0 +1,51 @@
+# ─── API Keys & Secrets ───────────────────────────────────────
+.env
+
+# ─── ChromaDB Persistent Storage ──────────────────────────────
+# This folder is auto-created when you first upload a paper.
+# It stores your indexed papers on disk. Do NOT commit this.
+data/chroma_db/
+
+# ─── Generated Data (v2) ─────────────────────────────────────
+# Extracted claims and Power BI CSV exports are generated outputs.
+data/claims/*.json
+data/exports/*.csv
+
+# ─── Python Cache ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ─── Virtual Environment ──────────────────────────────────────
+# The venv/ folder is created inside this project on F drive.
+# It contains all installed packages (~2GB). Never commit it.
+venv/
+.venv/
+env/
+ENV/
+
+# ─── ML Model Cache ───────────────────────────────────────────
+# Sentence Transformers and HuggingFace download models here.
+# They're large (100MB-1GB) — don't commit them.
+.cache/
+models/
+*.pt
+*.bin
+*.safetensors
+
+# ─── Uploaded PDFs (optional — uncomment if you don't want PDFs in git) ──
+# uploads/
+# *.pdf
+
+# ─── OS & Editor ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ─── Streamlit ────────────────────────────────────────────────
+.streamlit/secrets.toml

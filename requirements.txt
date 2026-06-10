@@ -1,0 +1,52 @@
+# ─────────────────────────────────────────────────────────────
+# requirements.txt — ResearchRadar v2 Dependencies
+#
+# Install everything with:  pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────
+
+# ─── LLM: Claude API ──────────────────────────────────────────
+anthropic>=0.25.0
+
+# ─── PDF Extraction ───────────────────────────────────────────
+# pdfplumber handles multi-column layouts, tables, and page-level text
+pdfplumber>=0.11.0
+
+# ─── Text Chunking ────────────────────────────────────────────
+# Tries paragraph → sentence → word order to keep logical units together
+langchain-text-splitters>=0.2.0
+
+# ─── Embeddings: Text → Vectors ───────────────────────────────
+# all-MiniLM-L6-v2 runs locally (free, no API call needed)
+sentence-transformers>=2.7.0
+
+# ─── Vector Database ──────────────────────────────────────────
+# Persistent local storage, cosine similarity, metadata filtering
+chromadb>=0.5.0
+
+# ─── Keyword Search ───────────────────────────────────────────
+# BM25 algorithm — combined with semantic search for hybrid retrieval
+rank-bm25>=0.2.2
+
+# ─── Sentiment Analysis ───────────────────────────────────────
+# DistilBERT sentiment model (HuggingFace Transformers + PyTorch)
+transformers>=4.40.0
+torch>=2.1.0
+
+# ─── Topic Modelling (Phase 2) ────────────────────────────────
+# BERTopic: unsupervised topic discovery (UMAP + HDBSCAN + c-TF-IDF)
+bertopic>=0.16.0
+
+# ─── Keyword Extraction (Phase 2) ─────────────────────────────
+# KeyBERT: semantic keyword ranking using embedding similarity
+keybert>=0.8.0
+
+# ─── Data Export & Visualization ──────────────────────────────
+pandas>=2.0.0
+plotly>=5.18.0
+
+# ─── UI ───────────────────────────────────────────────────────
+streamlit>=1.35.0
+
+# ─── Utilities ────────────────────────────────────────────────
+python-dotenv>=1.0.0    # Loads .env file into environment variables
+numpy>=1.26.0           # Array operations (embedding math)
