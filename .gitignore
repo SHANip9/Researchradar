@@ -49,3 +49,6 @@ Thumbs.db
 
 # ─── Streamlit ────────────────────────────────────────────────
 .streamlit/secrets.toml
+
+# ─── IDE & Agent Local State ─────────────────────────────────
+.agents/

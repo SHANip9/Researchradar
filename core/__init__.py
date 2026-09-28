@@ -1,12 +1,9 @@
 """
-core — ResearchRadar's processing engine
+core — ResearchRadar Streamlined Intelligence Engine
 
-Organized into focused sub-packages:
-    ingestion/   — PDF extraction, chunking, metadata tagging, claim extraction
-    embeddings/  — Text-to-vector conversion (SentenceTransformers)
-    storage/     — ChromaDB vector database operations
-    retrieval/   — Hybrid search (semantic + BM25 + RRF fusion)
-    analysis/    — NLP analysis (sentiment, similarity, topics, keywords)
-    debate/      — AI-powered debate engine
-    llm/         — Claude API prompt construction and response handling
+Modules:
+    engine.py    — PDF ingestion, embeddings, ChromaDB, and hybrid retrieval
+    plugins.py   — The 3 Research Agent Plugins (Debate, Differentiation, Predictions)
+    analytics.py — Semantic bias detector, similarity heatmaps, and rigor scorecard
+    ui.py        — Modern, minimal CSS design system
 """
