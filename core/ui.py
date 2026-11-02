@@ -248,32 +248,111 @@ def inject_clean_css():
     /* Input & Select fields */
     .stTextInput input, .stSelectbox select {
         background-color: #0f172a !important;
-        border: 1px solid rgba(148, 163, 184, 0.2) !important;
-        color: #f1f5f9 !important;
+        border: 1px solid rgba(148, 163, 184, 0.25) !important;
+        color: #f8fafc !important;
         border-radius: 8px !important;
+        font-size: 0.95rem !important;
     }
     .stTextInput input:focus {
-        border-color: #0284c7 !important;
-        box-shadow: 0 0 0 1px #0284c7 !important;
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 0 1px #38bdf8 !important;
+    }
+
+    /* Markdown Text & Content Readability */
+    .stMarkdown p, .stMarkdown li {
+        color: #f1f5f9 !important;
+        font-size: 0.94rem !important;
+        line-height: 1.65 !important;
+    }
+    .stMarkdown h3, .stMarkdown h4, .stMarkdown h5 {
+        color: #f8fafc !important;
+        font-weight: 700 !important;
+        margin-top: 14px !important;
+        margin-bottom: 8px !important;
+        letter-spacing: -0.01em !important;
+    }
+    .stMarkdown strong {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    .stMarkdown ul {
+        margin-top: 4px !important;
+        margin-bottom: 8px !important;
+        padding-left: 22px !important;
+    }
+    .stMarkdown li {
+        margin-bottom: 4px !important;
+    }
+    .stMarkdown blockquote {
+        border-left: 3px solid #38bdf8 !important;
+        background: rgba(18, 26, 44, 0.70) !important;
+        padding: 10px 16px !important;
+        margin: 8px 0 16px 0 !important;
+        border-radius: 0 8px 8px 0 !important;
+        color: #f1f5f9 !important;
+        font-style: normal !important;
+        font-size: 0.94rem !important;
+        line-height: 1.68 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22) !important;
+    }
+
+    /* Clean Top Right Corner - Remove Deploy button & Streamlit branding */
+    .stDeployButton,
+    [data-testid="stDeployButton"],
+    [data-testid="stAppDeployButton"],
+    div[data-testid="stToolbarActions"],
+    header [data-testid="stToolbar"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        pointer-events: none !important;
+    }
+    
+    header[data-testid="stHeader"] {
+        background: rgba(12, 16, 23, 0.85) !important;
+        backdrop-filter: blur(16px) !important;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12) !important;
+        height: 3.2rem !important;
+    }
+
+    header[data-testid="stHeader"]::after {
+        content: "⚡ ResearchRadar v3 · Hybrid RAG Engine";
+        position: absolute;
+        right: 1.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: #38bdf8;
+        background: rgba(14, 165, 233, 0.12);
+        border: 1px solid rgba(56, 189, 248, 0.28);
+        padding: 4px 14px;
+        border-radius: 9999px;
+        pointer-events: none;
     }
 
     /* Chat message styling */
     .user-msg-box {
-        background: rgba(30, 41, 59, 0.65);
-        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(30, 41, 59, 0.75);
+        border: 1px solid rgba(148, 163, 184, 0.22);
         border-radius: 12px 12px 2px 12px;
         padding: 12px 16px;
         margin-bottom: 12px;
-        margin-left: 18%;
+        margin-left: 15%;
+        color: #f8fafc;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
     }
     .bot-msg-box {
-        background: rgba(15, 23, 42, 0.78);
-        border: 1px solid rgba(56, 189, 248, 0.2);
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(56, 189, 248, 0.25);
         border-radius: 12px 12px 12px 2px;
         padding: 16px 20px;
         margin-bottom: 16px;
-        margin-right: 8%;
+        margin-right: 5%;
+        color: #f1f5f9;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
     }
 
@@ -290,33 +369,70 @@ def inject_clean_css():
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        font-size: 0.72rem;
+        font-size: 0.74rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        padding: 3px 10px;
+        padding: 4px 11px;
         border-radius: 9999px;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
     }
     .agent-badge-debate {
-        background: rgba(244, 63, 94, 0.12);
+        background: rgba(244, 63, 94, 0.15);
         color: #fb7185;
-        border: 1px solid rgba(244, 63, 94, 0.25);
+        border: 1px solid rgba(244, 63, 94, 0.3);
     }
     .agent-badge-compare {
-        background: rgba(14, 165, 233, 0.12);
+        background: rgba(14, 165, 233, 0.15);
         color: #38bdf8;
-        border: 1px solid rgba(14, 165, 233, 0.25);
+        border: 1px solid rgba(14, 165, 233, 0.3);
     }
     .agent-badge-predict {
-        background: rgba(99, 102, 241, 0.12);
+        background: rgba(99, 102, 241, 0.15);
         color: #a5b4fc;
-        border: 1px solid rgba(99, 102, 241, 0.25);
+        border: 1px solid rgba(99, 102, 241, 0.3);
     }
     .agent-badge-qa {
-        background: rgba(16, 185, 129, 0.12);
+        background: rgba(16, 185, 129, 0.15);
         color: #34d399;
-        border: 1px solid rgba(16, 185, 129, 0.25);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    /* Ready Prompts Pills styling */
+    .ready-prompt-btn {
+        background: rgba(30, 41, 59, 0.6) !important;
+        border: 1px solid rgba(148, 163, 184, 0.22) !important;
+        border-radius: 20px !important;
+        font-size: 0.82rem !important;
+        padding: 5px 12px !important;
+    }
+
+    /* Native ChatGPT Style Message Bubbles */
+    [data-testid="stChatMessage"] {
+        background: rgba(15, 23, 42, 0.85) !important;
+        border: 1px solid rgba(148, 163, 184, 0.16) !important;
+        border-radius: 12px !important;
+        padding: 16px 20px !important;
+        margin-bottom: 12px !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22) !important;
+    }
+    [data-testid="stChatMessageContent"] {
+        color: #f1f5f9 !important;
+    }
+    
+    /* Native ChatGPT Style Fixed Bottom Input */
+    [data-testid="stChatInput"] {
+        border-radius: 12px !important;
+        border: 1px solid rgba(56, 189, 248, 0.35) !important;
+        background: rgba(15, 23, 42, 0.95) !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+    }
+    [data-testid="stChatInput"] textarea {
+        color: #f8fafc !important;
+        font-size: 0.95rem !important;
+    }
+    [data-testid="stChatInput"] button {
+        color: #38bdf8 !important;
     }
     </style>
     """, unsafe_allow_html=True)

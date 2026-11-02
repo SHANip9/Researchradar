@@ -1,139 +1,88 @@
-# ResearchRadar — Complete Workflow
+# ResearchRadar — End-to-End Workflow
 
-> A step-by-step trace of exactly what happens, from PDF upload to final answer.
-
----
-
-## Part 1: Uploading a PDF
-
-### What you do:
-Drag a PDF into the sidebar uploader.
-
-### What happens internally:
-
-**Step 1 — `pdf_processor.extract_text_by_page()`**
-- `pdfplumber` opens the PDF and reads each page
-- Text is extracted per-page and stored in a dict: `{1: "page 1 text", 2: "page 2 text", ...}`
-- Image-only pages (scanned PDFs) produce no text → skipped
-
-**Step 2 — `pdf_processor.chunk_document()`**
-- LangChain's `RecursiveCharacterTextSplitter` splits each page into chunks
-- Target: ~2000 characters per chunk (~512 tokens)
-- 200-character overlap between consecutive chunks prevents content being cut at boundaries
-- Each chunk gets metadata: `{source, page, chunk_id, char_count}`
-
-**Step 3 — `embedder.embed_texts()`**
-- All chunk texts are sent to `all-MiniLM-L6-v2` (runs locally)
-- Each chunk becomes a 384-dimensional vector
-- Result: a matrix of shape `(num_chunks, 384)`
-
-**Step 4 — `sentiment_analyzer.analyze_chunks()`**
-- DistilBERT processes chunks in batches of 32
-- Raw output: `POSITIVE (0.89)` or `NEGATIVE (0.72)`
-- Mapped to 4 labels: optimistic / cautious / critical / neutral
-- `aggregate_paper_sentiment()` does weighted majority vote → one label per paper
-
-**Step 5 — `vector_store.add_paper_chunks()`**
-- All chunks, embeddings, and sentiment metadata written to ChromaDB
-- ChromaDB saves to disk immediately (persistent)
-- If same paper re-uploaded → `upsert()` updates existing entries (no crash)
-
-**Result:** Paper is fully indexed. UI shows: ✅ `paper.pdf — 142 chunks | 🟢 Optimistic`
+This document traces the complete execution flow from PDF upload to answer synthesis and dynamic analytical inspection.
 
 ---
 
-## Part 2: Asking a Question
+## Part 1: Document Ingestion Pipeline
 
-### What you do:
-Type a question in the text box. Click "Ask →".
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Streamlit UI (app.py)
+    participant Sec as Security (core/security.py)
+    participant PDF as PDF Processor (core/pdf_processor.py)
+    participant Emb as Embedder (core/embedder.py)
+    participant VStore as Vector Store (core/vector_store.py)
 
-### What happens internally:
-
-**Step 1 — `query_router.route_question()`**
-- Your question is checked for synthesis trigger keywords
-- "What method did paper 1 use?" → **Precise mode** (no triggers found)
-- "Compare how all papers approach X" → **Synthesis mode** (trigger: "compare", "all papers")
-
----
-
-**If PRECISE mode:**
-
-**Step 2a — `embedder.embed_query()`**
-- Your question → 384-dimensional vector
-
-**Step 3a — `retriever.retrieve_precise()`**
-- ChromaDB semantic search: top-20 most similar chunks across ALL papers
-- BM25 scores all chunks in the corpus for exact keyword matches
-- RRF fusion: `score = 1/(60 + semantic_rank) + 1/(60 + bm25_rank)` for each chunk
-- Top-8 highest-scoring chunks selected
-
----
-
-**If SYNTHESIS mode:**
-
-**Step 2b — For each uploaded paper:**
-- Semantic search filtered to that paper: top-20 chunks
-- BM25 scores filtered to that paper's chunks
-- RRF fusion → top-3 chunks from this paper
-- Repeat for all papers
-
-**Step 3b — Combine:**
-- Results from all papers merged: `top-3 from paper1 + top-3 from paper2 + ...`
-- Each chunk clearly labeled with its source paper
-
----
-
-**Step 4 — `memory.conversation.get_history()`**
-- Last 5 Q&A turns retrieved as a formatted string
-- If first question: returns empty string → Claude told "this is the first question"
-
-**Step 5 — `llm_handler.build_prompt()`**
-- Retrieved chunks formatted with headers: `[Chunk 1 | Paper: X | Page: 4]`
-- Conversation history appended
-- User question appended
-- Full prompt assembled
-
-**Step 6 — `llm_handler.get_answer()` → Claude API call**
-- System prompt tells Claude: "Answer ONLY from the chunks. Cite every claim."
-- User message: formatted prompt from step 5
-- Claude returns answer text with inline citations like `(Paper: X | Page: 4)`
-
-**Step 7 — Parse citations + build source list**
-- Unique `(source, page)` pairs extracted from retrieved chunks
-- Formatted as source cards for UI display
-
-**Step 8 — `memory.conversation.add_turn()`**
-- Question + answer stored in sliding window (last 5 turns kept)
-- Used as context for the NEXT question
-
-**Step 9 — Streamlit UI reruns**
-- Answer displayed in chat panel
-- Source cards shown below (paper name + page + sentiment badge)
-- Mode indicator shown (🎯 Precise or 🔀 Synthesis)
-
----
-
-## Part 3: Asking a Follow-Up
-
-### What you do:
-Ask "Which paper disagreed with that?"
-
-### What makes this work:
-The conversation history from Step 4 above contains:
-```
-Q1: [your previous question]
-A1: [Claude's previous answer, truncated to 500 chars]
+    User->>UI: Upload research paper (e.g. paper.pdf)
+    UI->>Sec: validate_pdf_upload(file)
+    Note over Sec: Verifies file size, extension (.pdf)<br/>& %PDF- magic bytes
+    Sec-->>UI: Validation OK
+    UI->>PDF: extract_pdf(tmp_path)
+    PDF-->>UI: Dict of page numbers & text
+    UI->>PDF: chunk_document(pages, paper_name)
+    Note over PDF: Sliding window (1000 chars, 150 overlap)<br/>Section detection & unique SHA256 chunk IDs
+    PDF-->>UI: Structured chunk objects
+    UI->>Emb: embed_texts(chunk_texts)
+    Emb-->>UI: 384-dimensional normalized vectors
+    UI->>VStore: upsert_chunks(ids, docs, metas, vectors)
+    VStore-->>UI: Ingestion complete
+    UI-->>User: Paper indexed successfully (chunk count displayed)
 ```
 
-This gets injected into the new prompt. Claude sees "that" refers to the previous answer
-and can correctly identify which paper disagreed.
+---
+
+## Part 2: Query Processing & Hybrid Multi-Agent Retrieval
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Streamlit UI (app.py)
+    participant Router as Router (core/query_router.py)
+    participant Ret as Retriever (core/retriever.py)
+    participant Chroma as ChromaDB Vector Store
+    participant BM25 as In-Memory BM25 Index
+    participant Agent as Agent Plugin (core/plugins.py)
+    participant LLM as LLM Handler (core/llm_handler.py)
+    participant Mem as Memory (memory/conversation.py)
+
+    User->>UI: Enter query (e.g. "/debate Scaling limits" or direct Q&A)
+    UI->>Router: parse_and_route_query(user_query, active_filter)
+    Router->>Agent: Invoke DebateAgent / Compare / Predict / Workflow / QA
+    Agent->>Ret: hybrid_search(query, top_k=8, paper_filter)
+    
+    par Dense Search
+        Ret->>Chroma: Cosine similarity query (top candidates)
+        Chroma-->>Ret: Ranked semantic chunks
+    and Sparse Search
+        Ret->>BM25: BM25Okapi keyword scoring
+        BM25-->>Ret: Ranked lexical chunks
+    end
+
+    Note over Ret: Reciprocal Rank Fusion (k=60)<br/>score = 1/(60+rank_sem) + 1/(60+rank_bm25)
+    Ret-->>Agent: Top-K fused context chunks
+
+    Agent->>LLM: generate_llm_response(system_prompt, prompt, chunks)
+    alt Claude API Available
+        LLM->>LLM: Call Claude 3.5 Sonnet API
+    else API Key Missing / Quota Exceeded
+        LLM->>LLM: Local Grounded Persona Synthesis with verified page citations
+    end
+    LLM-->>Agent: Synthesized response + citation metadata
+    Agent-->>UI: Rendered response
+    UI->>Mem: add_turn(user_query, response, agent)
+    UI-->>User: Display markdown response, citations & interactive Mermaid diagrams
+```
 
 ---
 
-## Part 4: Session Persistence
+## Part 3: Live Discourse & Semantic Analytics
 
-When you close and reopen the app:
-- ChromaDB loads from disk automatically (`data/chroma_db/`)
-- All your papers are still indexed — no need to re-upload
-- Conversation history is cleared (it's stored in RAM via `st.session_state`)
-- Sentiment data is recomputed from ChromaDB on first sidebar render
+When the user explores the **Dynamic Semantic & Bias Dashboard**:
+1. `core/analytics.py` analyzes the author's claim-to-caution ratio (measuring scientific hedging phrases vs overclaiming superlatives).
+2. Computes the **Methodological Rigor Breakdown** (empirical baseline references and limitation disclosures).
+3. Evaluates **Dynamic Discourse Tension** by mapping inquiry stances (Adversarial, Technical, Comparative, Exploratory) against the paper's academic sections.
+4. Computes cross-paper cosine similarity matrices displayed as interactive Plotly heatmaps.
