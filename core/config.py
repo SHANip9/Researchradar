@@ -37,7 +37,13 @@ ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
 LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "2500"))
 
-# ─── Retrieval ────────────────────────────────────────────────
+# ─── Retrieval & Reranker ──────────────────────────────────────
+# Inspired by: https://github.com/abh2050/hybrid_rag_with_bm25_reranker
+ENABLE_HYBRID_SEARCH: bool = os.getenv("ENABLE_HYBRID_SEARCH", "true").lower() == "true"
+ENABLE_RERANKING: bool = os.getenv("ENABLE_RERANKING", "true").lower() == "true"
+CROSS_ENCODER_MODEL_NAME: str = os.getenv("CROSS_ENCODER_MODEL_NAME", "cross-encoder/ms-marco-TinyBERT-L-2-v2")
+TOP_K_RETRIEVAL: int = int(os.getenv("TOP_K_RETRIEVAL", "12"))
+RERANK_TOP_N: int = int(os.getenv("RERANK_TOP_N", "6"))
 TOP_K_PRECISE: int = int(os.getenv("TOP_K_PRECISE", "8"))
 TOP_K_PER_PAPER: int = int(os.getenv("TOP_K_PER_PAPER", "3"))
 RRF_K: int = 60  # Reciprocal Rank Fusion constant

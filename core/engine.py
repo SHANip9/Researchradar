@@ -38,6 +38,7 @@ from core.retriever import (
     hybrid_search,
     clear_bm25_cache
 )
+from core.reranker import rerank_candidates
 from core.llm_handler import generate_llm_response
 
 log = get_logger("engine")

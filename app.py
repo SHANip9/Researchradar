@@ -260,8 +260,13 @@ with tab_chat:
                     st.markdown(f'<span class="agent-badge {badge_class}">{agent_icon} {agent_title}</span>', unsafe_allow_html=True)
                     render_content_with_visual_mermaid(msg["content"])
                     if msg.get("citations"):
-                        cit_tags = "".join([f'<span class="citation-tag">📄 {cit["paper"]} (p. {cit["page"]} · {cit.get("section", "Section")})</span>' for cit in msg["citations"]])
-                        st.markdown(f'<div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(148, 163, 184, 0.16);"><span style="color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Verified Citations:</span><br>{cit_tags}</div>', unsafe_allow_html=True)
+                        cit_tags = "".join([
+                            f'<span class="citation-tag">📄 {cit["paper"]} (p. {cit["page"]} · {cit.get("section", "Section")})'
+                            + (f' · <span style="color:#38bdf8;">Rerank: {cit["cross_score"]:.2f}</span>' if cit.get("cross_score") is not None else '')
+                            + '</span>'
+                            for cit in msg["citations"]
+                        ])
+                        st.markdown(f'<div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(148, 163, 184, 0.16);"><span style="color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Verified Citations (Hybrid BM25 + Vector + CrossEncoder):</span><br>{cit_tags}</div>', unsafe_allow_html=True)
 
         if query_to_process:
             q = sanitize_user_input(query_to_process.strip())
@@ -277,8 +282,13 @@ with tab_chat:
                     st.markdown(f'<span class="agent-badge {routed["badge_class"]}">{routed["agent_icon"]} {routed["agent_title"]}</span>', unsafe_allow_html=True)
                     render_content_with_visual_mermaid(routed["content"])
                     if routed.get("citations"):
-                        cit_tags = "".join([f'<span class="citation-tag">📄 {cit["paper"]} (p. {cit["page"]} · {cit.get("section", "Section")})</span>' for cit in routed["citations"]])
-                        st.markdown(f'<div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(148, 163, 184, 0.16);"><span style="color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Verified Citations:</span><br>{cit_tags}</div>', unsafe_allow_html=True)
+                        cit_tags = "".join([
+                            f'<span class="citation-tag">📄 {cit["paper"]} (p. {cit["page"]} · {cit.get("section", "Section")})'
+                            + (f' · <span style="color:#38bdf8;">Rerank: {cit["cross_score"]:.2f}</span>' if cit.get("cross_score") is not None else '')
+                            + '</span>'
+                            for cit in routed["citations"]
+                        ])
+                        st.markdown(f'<div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(148, 163, 184, 0.16);"><span style="color: #94a3b8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Verified Citations (Hybrid BM25 + Vector + CrossEncoder):</span><br>{cit_tags}</div>', unsafe_allow_html=True)
 
             # 3. Save assistant response into session state and conversation memory
             st.session_state.chat_history.append({
