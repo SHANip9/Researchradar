@@ -48,3 +48,4 @@ class ConversationMemory:
     def clear(self) -> None:
         """Clears memory history."""
         self.turns.clear()
+

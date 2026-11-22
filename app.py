@@ -219,28 +219,6 @@ tab_chat, tab_dashboard, tab_telemetry = st.tabs([
 # TAB 1: Unified Research Chat & Agent Console (Slash Commands)
 # ═════════════════════════════════════════════════════════════
 with tab_chat:
-    st.markdown("### 💬 Research Chat & Agent Console")
-    st.caption("Ask questions directly or invoke specialized AI agents with slash commands (`/debate`, `/compare`, `/predict`, `/workflow`).")
-
-    # Ready Prompts bar right above the conversation
-    st.markdown("###### ⚡ Ready Prompts (Click to Run):")
-    prompt_to_run = None
-    rp_cols = st.columns(4)
-    with rp_cols[0]:
-        if st.button("💡 Summarize Core Findings", use_container_width=True, key="rp_btn_summary"):
-            prompt_to_run = "What are the primary findings, core methodology, and experimental results?"
-    with rp_cols[1]:
-        if st.button("🥊 /debate Scalability Claims", use_container_width=True, key="rp_btn_debate"):
-            prompt_to_run = "/debate The proposed architecture achieves superior performance with minimal overhead"
-    with rp_cols[2]:
-        if st.button("⚖️ /compare Model Trade-offs", use_container_width=True, key="rp_btn_compare"):
-            prompt_to_run = "/compare Compare core methodologies, benchmark accuracy, and compute efficiency"
-    with rp_cols[3]:
-        if st.button("🔄 /workflow System Pipeline", use_container_width=True, key="rp_btn_workflow"):
-            prompt_to_run = "/workflow Reconstruct the complete system architecture workflow and experimental ablation metrics"
-
-    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-
     # Scope Filter & Clear Chat
     paper_options = ["All Papers"] + papers_in_db
     c_scope, c_clear = st.columns([4, 1])
@@ -259,13 +237,13 @@ with tab_chat:
     chat_display_area = st.container()
 
     # Chat Input with Sanitization
-    chat_prompt = st.chat_input("Ask a research question or enter /debate, /compare, /predict, /workflow...")
+    chat_prompt = st.chat_input("Ask any question or use /debate <your take>, /compare <topic 1 vs 2>, /workflow, /summarize...")
 
-    query_to_process = prompt_to_run or chat_prompt
+    query_to_process = chat_prompt
 
     with chat_display_area:
         if not st.session_state.chat_history and not query_to_process:
-            st.info("💡 **Tip:** Ask a direct research question in the prompt box below or click any of the **Ready Prompts** above.")
+            st.info("💡 **Grounded Research RAG Ready:** Ask any question about your uploaded PDF(s), or trigger an agent: `/debate <your take>`, `/compare <A vs B>`, `/workflow`, `/summarize`.")
 
         for msg in st.session_state.chat_history:
             if msg["role"] == "user":
