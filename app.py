@@ -39,7 +39,8 @@ from core.analytics import (
     compute_paper_stance, extract_top_concepts,
     analyze_inquiry_semantic_alignment,
     extract_paper_section_breakdown,
-    compute_corpus_comparison
+    compute_corpus_comparison,
+    compute_paper_trajectory
 )
 from core.security import validate_pdf_upload, sanitize_user_input, ValidationError
 from core.metrics import metrics
@@ -300,66 +301,325 @@ with tab_chat:
 # TAB 2: Dynamic Semantic & Bias Dashboard
 # ═════════════════════════════════════════════════════════════
 with tab_dashboard:
-    st.markdown("### 📊 Dynamic Research & Discourse Analytics")
-    st.caption("Algorithmic inspection of author objectivity, empirical rigor, and live semantic scrutiny reflecting your questions & agent sparring.")
+    st.markdown("### 📊 Comprehensive Semantic & Rhetorical Analysis Dashboard")
+    st.caption("Algorithmic inspection of paper quality, author rhetorical tone (Informative, Technical, Assertive, Cautious), section-by-section tone trajectory, and empirical objectivity.")
 
     all_chunks = get_all_chunks()
     total_docs = len(papers_in_db)
     total_c = len(all_chunks)
 
-    # ─── Document View Mode Selector ──────────────────────────────
-    dash_mode_options = [f"📄 {p}" for p in papers_in_db]
-    if total_docs > 1:
-        dash_mode_options.insert(0, "🌐 All Documents (Comparative Overview)")
-
-    col_sel, col_mode_info = st.columns([3, 2])
-    with col_sel:
-        selected_view = st.selectbox(
-            "Select Document Analysis View:",
-            dash_mode_options,
+    # ─── Top Selection Bar: Direct Focus on Active Research Paper ──
+    col_p_sel, col_p_opt = st.columns([3, 2])
+    with col_p_sel:
+        selected_dash_paper = st.selectbox(
+            "Select Research Paper to Analyze:",
+            papers_in_db,
             index=0,
-            key="dash_view_selector",
-            help="Switch between viewing individual document deep-dive analysis or multi-document comparison."
+            key="dash_paper_select",
+            help="Select which indexed research PDF to examine."
         )
+    with col_p_opt:
+        st.write("")
+        st.write("")
+        show_corpus_matrix = st.checkbox("🌐 Show Multi-Paper Comparison Matrix", value=False, key="chk_show_corpus_matrix")
 
-    is_all_view = selected_view.startswith("🌐")
+    # ─── Load Analytics for Selected Paper ────────────────────────
+    profile = analyze_paper_bias(selected_dash_paper)
+    stance = compute_paper_stance(selected_dash_paper)
+    sections = extract_paper_section_breakdown(selected_dash_paper)
+    concepts = extract_top_concepts(selected_dash_paper, top_n=12)
+    trajectory_df = compute_paper_trajectory(selected_dash_paper, max_points=35)
+    inquiry_data = analyze_inquiry_semantic_alignment(selected_dash_paper, st.session_state.chat_history)
 
-    if is_all_view:
-        # ═════════════════════════════════════════════════════════════
-        # VIEW A: Comparative Multi-Document Overview
-        # ═════════════════════════════════════════════════════════════
-        bias_profiles = {p: analyze_paper_bias(p) for p in papers_in_db}
-        avg_objectivity = int(sum(b.get("objectivity_score", 50) for b in bias_profiles.values()) / max(total_docs, 1))
-        total_corpus_pages = sum(b.get("total_pages", 0) for b in bias_profiles.values())
+    # Extract dominant tone
+    dom_tone_item = max(stance.items(), key=lambda x: x[1])
+    dom_tone_name = dom_tone_item[0]
+    dom_tone_pct = dom_tone_item[1]
 
-        # Top 4 Global Metric Cards
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.markdown(f'<div class="metric-card"><div class="metric-num">{total_docs}</div><div class="metric-title">Documents Indexed</div></div>', unsafe_allow_html=True)
-        with c2:
-            st.markdown(f'<div class="metric-card"><div class="metric-num">{total_c:,}</div><div class="metric-title">Total Corpus Chunks</div></div>', unsafe_allow_html=True)
-        with c3:
-            st.markdown(f'<div class="metric-card"><div class="metric-num">{total_corpus_pages:,}</div><div class="metric-title">Total Corpus Pages</div></div>', unsafe_allow_html=True)
-        with c4:
-            st.markdown(f'<div class="metric-card"><div class="metric-num">{avg_objectivity}/100</div><div class="metric-title">Average Objectivity</div></div>', unsafe_allow_html=True)
+    # ─── Executive Scientific Quality & Paper Metadata Banner ──────
+    paper_clean_title = profile.get("paper_title", selected_dash_paper)
+    st.markdown(f"""
+    <div class="glass-card" style="margin-bottom: 20px; border-left: 4px solid #38bdf8; padding: 18px 22px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+                <div style="font-size: 0.74rem; color: #38bdf8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
+                    📄 Active Paper Semantic Profile
+                </div>
+                <div style="font-size: 1.25rem; font-weight: 700; color: #f8fafc; margin-bottom: 4px;">
+                    {selected_dash_paper}
+                </div>
+                <div style="font-size: 0.85rem; color: #94a3b8;">
+                    Title: <strong style="color: #cbd5e1;">{paper_clean_title}</strong> &nbsp;·&nbsp;
+                    Pages: <strong style="color: #38bdf8;">{profile.get('total_pages', 0)}</strong> &nbsp;·&nbsp;
+                    Vector Chunks: <strong style="color: #38bdf8;">{profile.get('total_chunks', 0):,}</strong> &nbsp;·&nbsp;
+                    Length: <strong style="color: #cbd5e1;">~{profile.get('total_words', 0):,} words</strong>
+                </div>
+            </div>
+            <div>
+                <span class="citation-tag" style="border-color: {profile.get('quality_color', '#38bdf8')}; color: {profile.get('quality_color', '#38bdf8')}; font-size: 0.82rem; font-weight: 700; padding: 6px 14px;">
+                    {profile.get('quality_tier', 'Solid Academic Standard')}
+                </span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
+    # ─── Row 1: 4 Executive Scientific Scorecard Metrics ───────────
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-num" style="color: {profile.get('quality_color', '#38bdf8')};">{profile.get('quality_score', 75)}/100</div>
+            <div class="metric-title">Overall Paper Quality</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-num" style="color: {profile.get('bias_color', '#10b981')};">{profile.get('objectivity_score', 70)}/100</div>
+            <div class="metric-title">Scientific Objectivity</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-num" style="color: #38bdf8;">{profile.get('empirical_rigor', 60)}/100</div>
+            <div class="metric-title">Methodological Rigor</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c4:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-num" style="font-size: 1.35rem; color: #a5b4fc; padding-top: 6px;">{dom_tone_pct:.0f}%</div>
+            <div class="metric-title">Dominant Tone: {dom_tone_name.split()[0]}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Comparative Table
-        st.markdown("#### 📑 Side-by-Side Comparative Corpus Matrix")
+    st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
+
+    # ─── Row 2: Dual Core Semantic Visualizations ─────────────────
+    col_chart1, col_chart2 = st.columns([1, 1])
+
+    with col_chart1:
+        st.markdown("#### 🎭 Author's Rhetorical Tone & Sentiment Spectrum")
+        st.caption("Donut distribution of authorial stance across Informative, Technical, Assertive, and Cautious passages:")
+
+        df_stance = pd.DataFrame(list(stance.items()), columns=["Tone", "Percentage"])
+        fig_tone = px.pie(
+            df_stance,
+            values="Percentage",
+            names="Tone",
+            hole=0.55,
+            color="Tone",
+            color_discrete_map={
+                "Informative & Objective": "#38bdf8",
+                "Technical & Methodological": "#6366f1",
+                "Assertive / SOTA Claims": "#10b981",
+                "Cautious & Critical": "#f43f5e"
+            }
+        )
+        fig_tone.update_traces(
+            textinfo="percent+label",
+            textposition="inside",
+            insidetextorientation="radial"
+        )
+        fig_tone.update_layout(
+            annotations=[dict(
+                text=f"<span style='font-size:1.6rem; font-weight:800; color:#f8fafc;'>{dom_tone_pct:.0f}%</span><br><span style='font-size:0.75rem; color:#94a3b8; font-weight:600;'>{dom_tone_name.split()[0]}</span>",
+                x=0.5, y=0.5,
+                showarrow=False,
+                align="center"
+            )],
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#cbd5e1", family="Plus Jakarta Sans, sans-serif"),
+            margin=dict(l=10, r=10, t=20, b=10),
+            height=300,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+        )
+        st.plotly_chart(fig_tone, use_container_width=True)
+
+    with col_chart2:
+        st.markdown("#### 🏛️ Academic Section Architecture & Volume")
+        st.caption(f"Chunk volume across detected academic sections in **{selected_dash_paper}**:")
+
+        if sections:
+            df_sections = pd.DataFrame(list(sections.items()), columns=["Section", "Chunks"])
+            fig_sections = px.bar(
+                df_sections,
+                x="Chunks",
+                y="Section",
+                orientation="h",
+                color="Chunks",
+                color_continuous_scale=[[0, "#1e3a8a"], [0.5, "#0284c7"], [1.0, "#38bdf8"]],
+            )
+            fig_sections.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#cbd5e1", family="Plus Jakarta Sans, sans-serif"),
+                margin=dict(l=10, r=10, t=20, b=10),
+                height=300,
+                coloraxis_showscale=False,
+                yaxis=dict(autorange="reversed")
+            )
+            st.plotly_chart(fig_sections, use_container_width=True)
+        else:
+            st.info("No section boundaries identified.")
+
+    st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
+
+    # ─── Row 3: Semantic Tone & Reading Order Flow Trajectory ─────
+    st.markdown("#### 📉 Semantic Tone & Argument Flow Trajectory (Reading Order)")
+    st.caption("Continuous rhetorical flow tracking how the author's stance evolves across sections from Introduction to Methodology, Evaluation, and Limitations:")
+
+    if not trajectory_df.empty:
+        fig_traj = px.line(
+            trajectory_df,
+            x="chunk_index",
+            y="smoothed_tone",
+            line_shape="spline",
+            markers=True,
+            labels={"chunk_index": "Reading Order (Chunk Index)", "smoothed_tone": "Rhetorical Tone Score"},
+            hover_data={
+                "chunk_index": True,
+                "section": True,
+                "page": True,
+                "tone_label": True,
+                "text_preview": True,
+                "smoothed_tone": False
+            }
+        )
+        fig_traj.update_traces(
+            line=dict(color="#38bdf8", width=3),
+            marker=dict(size=7, color="#818cf8", symbol="circle")
+        )
+        fig_traj.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15, 23, 42, 0.45)",
+            font=dict(color="#cbd5e1", family="Plus Jakarta Sans, sans-serif"),
+            margin=dict(l=10, r=10, t=20, b=10),
+            height=280,
+            yaxis=dict(
+                tickvals=[-0.65, 0.15, 0.45, 0.90],
+                ticktext=["🛡️ Cautious / Critical", "📘 Informative", "⚙️ Technical", "🚀 Assertive / SOTA"],
+                gridcolor="rgba(148, 163, 184, 0.12)",
+                zeroline=True,
+                zerolinecolor="rgba(148, 163, 184, 0.25)"
+            ),
+            xaxis=dict(
+                gridcolor="rgba(148, 163, 184, 0.10)",
+                title="Reading Order Sequence (Chunks across document)"
+            )
+        )
+        st.plotly_chart(fig_traj, use_container_width=True)
+    else:
+        st.info("Reading trajectory requires indexed chunks.")
+
+    st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
+
+    # ─── Row 4: Methodological Rigor & Transparency Breakdown ─────
+    st.markdown(f"#### 🛡️ Methodological Rigor & Objectivity Breakdown: **{selected_dash_paper}**")
+    st.caption("Empirical baseline disclosure, scientific hedging density, and overclaiming risk audit:")
+
+    col_b1, col_b2 = st.columns([1, 1])
+
+    with col_b1:
+        st.markdown(f"""<div class="glass-card">
+        <div style="font-weight: 700; font-size: 1.1rem; color: #f8fafc; margin-bottom: 6px;">
+            Objectivity Rating: <span style="color: {profile.get('bias_color', '#10b981')};">{profile.get('objectivity_score', 70)}/100</span>
+        </div>
+        <div style="font-size: 0.88rem; color: {profile.get('bias_color', '#10b981')}; margin-bottom: 14px;">
+            {profile.get('bias_risk', 'Balanced Academic Discourse')}
+        </div>
+        <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 4px;">Scientific Hedging & Caution Density:</div>
+        <div class="bias-meter"><div class="bias-bar-low" style="width: {min(profile.get('hedging_count', 0) * 12, 100)}%;"></div></div>
+        <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 4px; margin-top: 10px;">Overclaiming / Superlatives Density:</div>
+        <div class="bias-meter"><div class="bias-bar-high" style="width: {min(profile.get('overclaim_count', 0) * 20, 100)}%;"></div></div>
+        <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 4px; margin-top: 10px;">Limitation & Failure Case Disclosure:</div>
+        <div class="bias-meter"><div class="bias-bar-med" style="width: {min(profile.get('limitation_count', 0) * 15, 100)}%;"></div></div>
+        </div>""", unsafe_allow_html=True)
+
+    with col_b2:
+        st.markdown(f"""
+        <div class="glass-card">
+            <div style="font-weight: 700; font-size: 1.1rem; color: #f8fafc; margin-bottom: 12px;">
+                Empirical Rigor Breakdown
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #94a3b8;">Empirical Baselines Referenced:</span>
+                <strong style="color: #38bdf8;">{profile.get('baseline_count', 0)} occurrences</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #94a3b8;">Explicit Limitation Statements:</span>
+                <strong style="color: #f59e0b;">{profile.get('limitation_count', 0)} statements</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #94a3b8;">Scientific Hedging Phrases:</span>
+                <strong style="color: #10b981;">{profile.get('hedging_count', 0)} instances</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #94a3b8;">Estimated Word Count:</span>
+                <strong style="color: #cbd5e1;">~{profile.get('total_words', 0):,} words</strong>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+
+    # ─── Row 5: Core Thematic Terminology for THIS paper ───────────
+    st.markdown(f"#### 🏷️ Core Thematic Terminology: **{selected_dash_paper}**")
+    st.caption("High-frequency scientific and domain concepts extracted with academic stopword filtration:")
+    if concepts:
+        tags_html = "".join([f'<span class="citation-tag"><strong>{term}</strong> ({cnt})</span>' for term, cnt in concepts])
+        st.markdown(f'<div class="glass-card">{tags_html}</div>', unsafe_allow_html=True)
+    else:
+        st.info("No concepts extracted yet.")
+
+    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+
+    # ─── Row 6: Live Inquiry Semantic Scrutiny & Discourse Tension ─
+    st.markdown(f"#### ⚡ Live Discourse Scrutiny & Inquiries: **{selected_dash_paper}**")
+    st.caption("Dynamic reflection of your chat questions and agent debates targeting this document:")
+
+    with st.container(border=True):
+        col_t1, col_t2 = st.columns([2, 1])
+        with col_t1:
+            st.markdown(f"""
+            <div style="font-size: 1.05rem; font-weight: 700; color: {inquiry_data['tension_color']}; margin-bottom: 6px;">
+                {inquiry_data['tension_label']}
+            </div>
+            <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 8px;">
+                Discourse Scrutiny Level: <strong>{inquiry_data['discourse_tension']}%</strong>
+            </div>
+            """, unsafe_allow_html=True)
+            st.progress(inquiry_data["discourse_tension"] / 100.0)
+
+        with col_t2:
+            inv = inquiry_data["agent_invocations"]
+            st.markdown(f"""
+            <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.7;">
+                <strong>Session Inquiries:</strong> {inquiry_data['total_inquiries']}<br>
+                🥊 <strong>Debates:</strong> {inv['Debate']} | ⚖️ <strong>Compares:</strong> {inv['Comparison']}<br>
+                🔮 <strong>Predictions:</strong> {inv['Prediction']}
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ─── Row 7: Optional Multi-Paper Comparative Matrix ───────────
+    if show_corpus_matrix:
+        st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+        st.markdown("### 🌐 Multi-Paper Comparative Matrix & Cross-Corpus Overview")
         st.caption("Empirical, architectural, and methodological metrics for all indexed documents in the active knowledge base:")
+
         df_corpus = compute_corpus_comparison()
         if not df_corpus.empty:
             st.dataframe(df_corpus, use_container_width=True, hide_index=True)
 
-        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        col_c1, col_c2 = st.columns([1, 1])
 
-        # Multi-Document Visualizations
-        col_comp1, col_comp2 = st.columns([1, 1])
-
-        with col_comp1:
+        with col_c1:
             st.markdown("#### 🌐 Cross-Paper Semantic Similarity Heatmap")
-            st.caption("Pairwise cosine similarity matrix across document embedding centroids:")
             sim_df = compute_similarity_matrix()
             if not sim_df.empty and len(papers_in_db) > 1:
                 fig_sim = px.imshow(
@@ -374,21 +634,21 @@ with tab_dashboard:
                     plot_bgcolor="rgba(0,0,0,0)",
                     font_color="#cbd5e1",
                     margin=dict(l=10, r=10, t=20, b=10),
-                    height=300
+                    height=280
                 )
                 st.plotly_chart(fig_sim, use_container_width=True)
             else:
                 st.info("Upload 2 or more research papers to compute cross-paper cosine similarity matrix.")
 
-        with col_comp2:
-            st.markdown("#### ⚖️ Comparative Rigor & Objectivity Scores")
-            st.caption("Comparing author objectivity and empirical baseline rigor across documents:")
+        with col_c2:
+            st.markdown("#### ⚖️ Comparative Quality & Rigor Scores")
+            bias_profiles = {p: analyze_paper_bias(p) for p in papers_in_db}
             comp_chart_data = []
             for p in papers_in_db:
                 bp = bias_profiles.get(p, {})
-                comp_chart_data.append({"Document": p[:24] + "..." if len(p) > 24 else p, "Metric": "Objectivity", "Score": bp.get("objectivity_score", 0)})
-                comp_chart_data.append({"Document": p[:24] + "..." if len(p) > 24 else p, "Metric": "Empirical Rigor", "Score": bp.get("empirical_rigor", 0)})
-                comp_chart_data.append({"Document": p[:24] + "..." if len(p) > 24 else p, "Metric": "Transparency", "Score": bp.get("transparency_score", 0)})
+                comp_chart_data.append({"Document": p[:22] + "...", "Metric": "Quality Score", "Score": bp.get("quality_score", 0)})
+                comp_chart_data.append({"Document": p[:22] + "...", "Metric": "Empirical Rigor", "Score": bp.get("empirical_rigor", 0)})
+                comp_chart_data.append({"Document": p[:22] + "...", "Metric": "Objectivity", "Score": bp.get("objectivity_score", 0)})
 
             df_comp_chart = pd.DataFrame(comp_chart_data)
             fig_comp = px.bar(
@@ -397,205 +657,17 @@ with tab_dashboard:
                 y="Score",
                 color="Metric",
                 barmode="group",
-                color_discrete_map={"Objectivity": "#38bdf8", "Empirical Rigor": "#10b981", "Transparency": "#f59e0b"}
+                color_discrete_map={"Quality Score": "#38bdf8", "Empirical Rigor": "#10b981", "Objectivity": "#f59e0b"}
             )
             fig_comp.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#cbd5e1", family="Plus Jakarta Sans, sans-serif"),
                 margin=dict(l=10, r=10, t=20, b=10),
-                height=300,
+                height=280,
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig_comp, use_container_width=True)
-
-    else:
-        # ═════════════════════════════════════════════════════════════
-        # VIEW B: Dedicated Granular Document Analysis (Per-PDF)
-        # ═════════════════════════════════════════════════════════════
-        selected_dash_paper = selected_view.replace("📄 ", "").strip()
-        profile = analyze_paper_bias(selected_dash_paper)
-        sections = extract_paper_section_breakdown(selected_dash_paper)
-        stance = compute_paper_stance(selected_dash_paper)
-        concepts = extract_top_concepts(selected_dash_paper, top_n=10)
-        inquiry_data = analyze_inquiry_semantic_alignment(selected_dash_paper, st.session_state.chat_history)
-
-        # Document Header Banner
-        paper_clean_title = profile.get("paper_title", selected_dash_paper)
-        st.markdown(f"""
-        <div class="glass-card" style="margin-bottom: 20px; border-left: 4px solid #38bdf8; padding: 16px 20px;">
-            <div style="font-size: 0.75rem; color: #38bdf8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
-                📄 Individual Document Inspection
-            </div>
-            <div style="font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-bottom: 4px;">
-                {selected_dash_paper}
-            </div>
-            <div style="font-size: 0.85rem; color: #94a3b8;">
-                Title: <strong style="color: #cbd5e1;">{paper_clean_title}</strong> &nbsp;·&nbsp;
-                Pages: <strong style="color: #38bdf8;">{profile.get('total_pages', 0)}</strong> &nbsp;·&nbsp;
-                Chunks: <strong style="color: #38bdf8;">{profile.get('total_chunks', 0):,}</strong> &nbsp;·&nbsp;
-                Word Count: <strong style="color: #cbd5e1;">~{profile.get('total_words', 0):,}</strong>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Top 4 Document-Specific Metric Cards
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.markdown(f'<div class="metric-card"><div class="metric-num">{profile.get("total_chunks", 0):,}</div><div class="metric-title">Document Chunks</div></div>', unsafe_allow_html=True)
-        with c2:
-            st.markdown(f'<div class="metric-card"><div class="metric-num">{profile.get("total_pages", 0)}</div><div class="metric-title">Extracted Pages</div></div>', unsafe_allow_html=True)
-        with c3:
-            st.markdown(f'<div class="metric-card"><div class="metric-num">{profile.get("objectivity_score", 50)}/100</div><div class="metric-title" style="color:{profile.get("bias_color", "#38bdf8")};">Objectivity Score</div></div>', unsafe_allow_html=True)
-        with c4:
-            st.markdown(f'<div class="metric-card"><div class="metric-num">{profile.get("empirical_rigor", 50)}/100</div><div class="metric-title">Empirical Rigor</div></div>', unsafe_allow_html=True)
-
-        st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
-
-        # Section 1: Academic Section Anatomy & Author Stance
-        col_sec1, col_sec2 = st.columns([1, 1])
-
-        with col_sec1:
-            st.markdown("#### 🏛️ Academic Section Anatomy & Volume")
-            st.caption(f"Chunk distribution across academic sections extracted in **{selected_dash_paper}**:")
-            if sections:
-                df_sections = pd.DataFrame(list(sections.items()), columns=["Section", "Chunks"])
-                fig_sections = px.bar(
-                    df_sections,
-                    x="Chunks",
-                    y="Section",
-                    orientation="h",
-                    color="Chunks",
-                    color_continuous_scale=[[0, "#1e3a8a"], [0.5, "#0284c7"], [1.0, "#38bdf8"]],
-                )
-                fig_sections.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#cbd5e1", family="Plus Jakarta Sans, sans-serif"),
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    height=280,
-                    coloraxis_showscale=False
-                )
-                st.plotly_chart(fig_sections, use_container_width=True)
-            else:
-                st.info("No section boundaries identified.")
-
-        with col_sec2:
-            st.markdown("#### 🎭 Author Stance & Writing Tone")
-            st.caption(f"Tone classification across passages in **{selected_dash_paper}**:")
-            df_stance = pd.DataFrame(list(stance.items()), columns=["Stance", "Percentage"])
-            fig_stance = px.pie(
-                df_stance,
-                values="Percentage",
-                names="Stance",
-                hole=0.55,
-                color="Stance",
-                color_discrete_map={
-                    "Optimistic": "#10b981",
-                    "Cautious": "#f59e0b",
-                    "Critical": "#f43f5e",
-                    "Neutral": "#64748b"
-                }
-            )
-            fig_stance.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#cbd5e1", family="Plus Jakarta Sans, sans-serif"),
-                margin=dict(l=10, r=10, t=10, b=10),
-                height=280,
-                showlegend=True
-            )
-            st.plotly_chart(fig_stance, use_container_width=True)
-
-        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-
-        # Section 2: Semantic Bias & Objectivity Breakdown
-        st.markdown(f"#### 🛡️ Methodological Rigor & Objectivity Breakdown: **{selected_dash_paper}**")
-        st.caption("Author claim-to-caution ratio, confirmation bias risk, and baseline disclosure.")
-
-        if profile:
-            col_b1, col_b2 = st.columns([1, 1])
-
-            with col_b1:
-                st.markdown(f"""<div class="glass-card">
-    <div style="font-weight: 700; font-size: 1.1rem; color: #f8fafc; margin-bottom: 6px;">
-    Objectivity Rating: <span style="color: {profile['bias_color']};">{profile['objectivity_score']}/100</span>
-    </div>
-    <div style="font-size: 0.88rem; color: {profile['bias_color']}; margin-bottom: 14px;">
-    {profile['bias_risk']}
-    </div>
-    <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 4px;">Hedging & Caution Density:</div>
-    <div class="bias-meter"><div class="bias-bar-low" style="width: {min(profile['hedging_count'] * 15, 100)}%;"></div></div>
-    <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 4px; margin-top: 10px;">Overclaiming / Superlatives Density:</div>
-    <div class="bias-meter"><div class="bias-bar-high" style="width: {min(profile['overclaim_count'] * 20, 100)}%;"></div></div>
-    <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 4px; margin-top: 10px;">Limitation & Failure Case Disclosure:</div>
-    <div class="bias-meter"><div class="bias-bar-med" style="width: {min(profile['limitation_count'] * 20, 100)}%;"></div></div>
-    </div>""", unsafe_allow_html=True)
-
-            with col_b2:
-                st.markdown(f"""
-                <div class="glass-card">
-                    <div style="font-weight: 700; font-size: 1.1rem; color: #f8fafc; margin-bottom: 12px;">
-                        Methodological Rigor Breakdown
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #94a3b8;">Empirical Baselines Referenced:</span>
-                        <strong style="color: #38bdf8;">{profile['baseline_count']} occurrences</strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #94a3b8;">Explicit Limitation Statements:</span>
-                        <strong style="color: #f59e0b;">{profile['limitation_count']} statements</strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #94a3b8;">Scientific Hedging Phrases:</span>
-                        <strong style="color: #10b981;">{profile['hedging_count']} instances</strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #94a3b8;">Estimated Word Count:</span>
-                        <strong style="color: #cbd5e1;">~{profile['total_words']:,} words</strong>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-
-        # Section 3: Core Thematic Terminology for THIS paper
-        st.markdown(f"#### 🏷️ Core Thematic Terminology: **{selected_dash_paper}**")
-        st.caption("Extracted high-frequency domain keywords and scientific concepts:")
-        if concepts:
-            tags_html = "".join([f'<span class="citation-tag"><strong>{term}</strong> ({cnt})</span>' for term, cnt in concepts])
-            st.markdown(f'<div class="glass-card">{tags_html}</div>', unsafe_allow_html=True)
-        else:
-            st.info("No concepts extracted yet.")
-
-        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-
-        # Section 4: Live Discourse & Semantic Inquiry Scrutiny for THIS paper
-        st.markdown(f"#### ⚡ Live Discourse Scrutiny & Inquiries: **{selected_dash_paper}**")
-        st.caption("Dynamic reflection of your chat questions and agent debates targeting this document:")
-
-        with st.container(border=True):
-            col_t1, col_t2 = st.columns([2, 1])
-            with col_t1:
-                st.markdown(f"""
-                <div style="font-size: 1.05rem; font-weight: 700; color: {inquiry_data['tension_color']}; margin-bottom: 6px;">
-                    {inquiry_data['tension_label']}
-                </div>
-                <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 8px;">
-                    Discourse Scrutiny Level: <strong>{inquiry_data['discourse_tension']}%</strong>
-                </div>
-                """, unsafe_allow_html=True)
-                st.progress(inquiry_data["discourse_tension"] / 100.0)
-
-            with col_t2:
-                inv = inquiry_data["agent_invocations"]
-                st.markdown(f"""
-                <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.7;">
-                    <strong>Session Inquiries:</strong> {inquiry_data['total_inquiries']}<br>
-                    🥊 <strong>Debates:</strong> {inv['Debate']} | ⚖️ <strong>Compares:</strong> {inv['Comparison']}<br>
-                    🔮 <strong>Predictions:</strong> {inv['Prediction']}
-                </div>
-                """, unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════
