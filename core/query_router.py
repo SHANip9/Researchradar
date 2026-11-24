@@ -19,6 +19,7 @@ from core.plugins import (
 )
 from core.retriever import hybrid_search
 from core.llm_handler import generate_llm_response
+from core.ragas_eval import evaluate_rag_response
 from core.logger import get_logger
 
 log = get_logger("query_router")
@@ -94,88 +95,106 @@ def parse_and_route_query(user_query: str, active_filter: str | None, papers_in_
         if not topic:
             topic = "The paper's claims are completely valid, scalable, and superior to all existing baselines."
         res = DebateAgent.run(topic, target_paper=effective_paper_filter)
-        return {
+        routed = {
             "agent": "debate",
             "agent_title": "Adversarial Debate Agent (Opposite Stance)",
             "agent_icon": "🥊",
             "badge_class": "agent-badge-debate",
             "content": res["content"],
-            "citations": res.get("citations", [])
+            "citations": res.get("citations", []),
+            "chunks": res.get("chunks", [])
         }
 
     # Step 3: Route /compare (Compares differences between 2 topics or papers)
-    if low.startswith("/compare") or low.startswith("/diff") or low.startswith("/contrast"):
+    elif low.startswith("/compare") or low.startswith("/diff") or low.startswith("/contrast"):
         focus = re.sub(r"^/(?:compare|diff|contrast)\s*", "", trimmed, flags=re.IGNORECASE).strip()
         if not focus:
             focus = "Compare core architectural paradigms, empirical performance differences, and computational trade-offs."
         res = ComparisonAgent.run(focus, target_paper=effective_paper_filter)
-        return {
+        routed = {
             "agent": "compare",
             "agent_title": "Comparative Differentiation Agent",
             "agent_icon": "⚖️",
             "badge_class": "agent-badge-compare",
             "content": res["content"],
-            "citations": res.get("citations", [])
+            "citations": res.get("citations", []),
+            "chunks": res.get("chunks", [])
         }
 
     # Step 4: Route /workflow (Generates paper workflows & tables)
-    if low.startswith("/workflow") or low.startswith("/architecture") or low.startswith("/pipeline") or low.startswith("/table"):
+    elif low.startswith("/workflow") or low.startswith("/architecture") or low.startswith("/pipeline") or low.startswith("/table"):
         focus = re.sub(r"^/(?:workflow|architecture|pipeline|table)\s*", "", trimmed, flags=re.IGNORECASE).strip()
         if not focus:
             focus = "Complete system architecture workflow and experimental ablation metrics table"
         res = WorkflowTableAgent.run(focus, target_paper=effective_paper_filter)
-        return {
+        routed = {
             "agent": "workflow",
             "agent_title": "Architecture & Workflow Agent",
             "agent_icon": "🔄",
             "badge_class": "agent-badge-predict",
             "content": res["content"],
-            "citations": res.get("citations", [])
+            "citations": res.get("citations", []),
+            "chunks": res.get("chunks", [])
         }
 
     # Step 5: Route /summarize (Generates complete structured paper summary)
-    if low.startswith("/summarize") or low.startswith("/summeris") or low.startswith("/summary"):
+    elif low.startswith("/summarize") or low.startswith("/summeris") or low.startswith("/summary"):
         focus = re.sub(r"^/(?:summarize|summeris|summary)\s*", "", trimmed, flags=re.IGNORECASE).strip()
         res = SummaryAgent.run(focus, target_paper=effective_paper_filter)
-        return {
+        routed = {
             "agent": "summary",
             "agent_title": "Executive Research Summary Agent",
             "agent_icon": "📑",
             "badge_class": "agent-badge-qa",
             "content": res["content"],
-            "citations": res.get("citations", [])
+            "citations": res.get("citations", []),
+            "chunks": res.get("chunks", [])
         }
 
     # Step 6: Route /predict (3-5 year trajectories)
-    if low.startswith("/predict") or low.startswith("/future"):
+    elif low.startswith("/predict") or low.startswith("/future"):
         topic = re.sub(r"^/(?:predict|future)\s*", "", trimmed, flags=re.IGNORECASE).strip()
         if not topic:
             topic = "Project theoretical bottlenecks and 3-5 year evolution."
         res = PredictionAgent.run(topic, horizon="3 to 5-Year Evolutionary Trajectory", paper_filter=effective_paper_filter)
-        return {
+        routed = {
             "agent": "predict",
             "agent_title": "Future Prediction Agent",
             "agent_icon": "🔮",
             "badge_class": "agent-badge-predict",
             "content": res["content"],
-            "citations": res.get("citations", [])
+            "citations": res.get("citations", []),
+            "chunks": res.get("chunks", [])
         }
 
     # Step 7: Default Grounded Research Q&A (Near-0 hallucination, strictly relevant to user query)
-    chunks = hybrid_search(trimmed, top_k=7, paper_filter=effective_paper_filter)
-    system_prompt = """You are ResearchRadar, an exacting, precision research assistant.
+    else:
+        chunks = hybrid_search(trimmed, top_k=7, paper_filter=effective_paper_filter)
+        system_prompt = """You are ResearchRadar, an exacting, precision research assistant.
 CRITICAL ZERO-HALLUCINATION DIRECTIVES:
 1. Answer the user's specific question DIRECTLY and THOROUGHLY based ONLY on the provided context passages.
 2. Every fact, statistic, and conclusion MUST be directly anchored in the text.
 3. For every single claim, cite the source using: (Paper: <Title> | Page: <Page Number>).
 4. If the retrieved context does not contain the answer, you must state explicitly: "The uploaded paper(s) do not contain information to address this question." NEVER guess or invent details."""
 
-    res = generate_llm_response(system_prompt, trimmed, chunks)
-    return {
-        "agent": "qa",
-        "agent_title": "Grounded Research Q&A",
-        "agent_icon": "🔬",
-        "badge_class": "agent-badge-qa",
-        "content": res["content"],
-        "citations": res.get("citations", [])
-    }
+        res = generate_llm_response(system_prompt, trimmed, chunks)
+        routed = {
+            "agent": "qa",
+            "agent_title": "Grounded Research Q&A",
+            "agent_icon": "🔬",
+            "badge_class": "agent-badge-qa",
+            "content": res["content"],
+            "citations": res.get("citations", []),
+            "chunks": res.get("chunks", chunks)
+        }
+
+    # Execute Enterprise AI Evals & RAGAS assessment
+    try:
+        eval_chunks = routed.get("chunks", [])
+        ragas_eval = evaluate_rag_response(trimmed, routed["content"], eval_chunks)
+        routed["ragas"] = ragas_eval
+    except Exception as exc:
+        log.warning("RAGAS assessment error: %s", exc)
+        routed["ragas"] = None
+
+    return routed
